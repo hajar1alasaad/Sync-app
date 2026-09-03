@@ -1,0 +1,6 @@
+{
+  "name": "Sync",
+  "description": "Real-time social synchronization with Google Auth, dynamic profile statistics, and digital wallet.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
