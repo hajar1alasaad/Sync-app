@@ -113,6 +113,8 @@ dependencies {
   implementation(platform(libs.supabase.bom))
   implementation(libs.supabase.postgrest)
   implementation(libs.supabase.auth)
+  implementation(libs.supabase.realtime)
+  implementation(libs.androidx.browser)
   implementation(libs.ktor.client.okhttp)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.firebase.appcheck.recaptcha)

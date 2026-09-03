@@ -6,6 +6,8 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialCustomException
+import androidx.credentials.exceptions.GetCredentialInterruptedException
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -38,7 +40,8 @@ sealed interface AuthState {
 data class LoginUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val infoMessage: String? = null
+    val infoMessage: String? = null,
+    val isNoGoogleAccountFound: Boolean = false
 )
 
 class AuthViewModel : ViewModel() {
@@ -75,7 +78,7 @@ class AuthViewModel : ViewModel() {
                                     displayName = name,
                                     avatarUrl = avatar
                                 )
-                                // Trigger automatic User & Wallet sync
+                                // Trigger automatic User & Wallet sync in Supabase
                                 SupabaseManager.syncUserAndWallet()
                             } else {
                                 _authState.value = AuthState.Unauthenticated
@@ -97,6 +100,13 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Requirement 1: CredentialManager & Supabase Auth Integration
+     * 1. Official Android CredentialManager API with GetGoogleIdOption
+     * 2. Direct Supabase authentication via supabase.auth.signInWith(IDToken)
+     * 3. Automatic insertion/sync of row in profiles and wallets (balance = 0.0)
+     * 4. Crash-safe handling of all GetCredentialException types
+     */
     fun signInWithGoogle(context: Context) {
         viewModelScope.launch {
             _loginUiState.value = LoginUiState(isLoading = true)
@@ -130,13 +140,13 @@ class AuthViewModel : ViewModel() {
                     val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                     val idToken = googleIdTokenCredential.idToken
 
-                    // Authenticate with Supabase via supabase.auth.signInWith(IDToken)
+                    // Authenticate directly with Supabase via IDToken
                     SupabaseManager.auth.signInWith(IDToken) {
                         this.idToken = idToken
                         provider = Google
                     }
 
-                    // Automatic User & Wallet Sync
+                    // Sync profiles & wallets tables in Supabase
                     SupabaseManager.syncUserAndWallet(
                         fallbackName = googleIdTokenCredential.displayName,
                         fallbackAvatar = googleIdTokenCredential.profilePictureUri?.toString()
@@ -159,13 +169,26 @@ class AuthViewModel : ViewModel() {
                 Log.w(TAG, "No Google credentials available on device: ${e.message}")
                 _loginUiState.value = LoginUiState(
                     isLoading = false,
-                    errorMessage = "No Google account found on this device. Please add an account or use Demo Sign-In."
+                    errorMessage = "No Google account found on this device.",
+                    isNoGoogleAccountFound = true
+                )
+            } catch (e: GetCredentialInterruptedException) {
+                Log.w(TAG, "Credential retrieval interrupted: ${e.message}")
+                _loginUiState.value = LoginUiState(
+                    isLoading = false,
+                    errorMessage = "Sign-in was interrupted. Please try again."
+                )
+            } catch (e: GetCredentialCustomException) {
+                Log.e(TAG, "Custom credential exception: ${e.type} - ${e.message}")
+                _loginUiState.value = LoginUiState(
+                    isLoading = false,
+                    errorMessage = e.message ?: "Failed to sign in with Google credential."
                 )
             } catch (e: Throwable) {
                 Log.e(TAG, "Google Credential Manager error: ${e.message}", e)
                 _loginUiState.value = LoginUiState(
                     isLoading = false,
-                    errorMessage = "Authentication failed: ${e.localizedMessage ?: "Unknown error"}. You can also use Demo Sign-In."
+                    errorMessage = "Authentication error: ${e.localizedMessage ?: "Unknown error"}. You can also use Demo Sign-In."
                 )
             }
         }
@@ -173,13 +196,11 @@ class AuthViewModel : ViewModel() {
 
     /**
      * Fallback authenticated entry for emulator development environments
-     * where Google Play Services or Client ID might not be configured.
      */
     fun signInWithDemo(demoEmail: String = "hajarsync@gmail.com", demoName: String = "Hajar Alasaad") {
         viewModelScope.launch {
             _loginUiState.value = LoginUiState(isLoading = true)
             try {
-                // Generate or use deterministic user ID
                 val userId = "sync-user-" + demoEmail.hashCode().toString().removePrefix("-")
                 _authState.value = AuthState.Authenticated(
                     userId = userId,
@@ -218,7 +239,11 @@ class AuthViewModel : ViewModel() {
     }
 
     fun clearMessages() {
-        _loginUiState.value = _loginUiState.value.copy(errorMessage = null, infoMessage = null)
+        _loginUiState.value = _loginUiState.value.copy(
+            errorMessage = null,
+            infoMessage = null,
+            isNoGoogleAccountFound = false
+        )
     }
 
     companion object {

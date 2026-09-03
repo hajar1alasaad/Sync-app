@@ -11,6 +11,8 @@ import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.realtime.realtime
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,11 +48,13 @@ object SupabaseManager {
             httpEngine = OkHttp.create()
             install(Auth)
             install(Postgrest)
+            install(Realtime)
         }
     }
 
     val auth get() = client.auth
     val postgrest get() = client.postgrest
+    val realtime get() = client.realtime
 
     /**
      * Automatic User & Wallet Sync:

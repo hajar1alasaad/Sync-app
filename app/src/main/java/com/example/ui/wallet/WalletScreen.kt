@@ -81,7 +81,7 @@ fun WalletScreen(
         val successMsg = (uiState as? WalletUiState.Success)?.depositSuccessMessage
         if (successMsg != null) {
             snackbarHostState.showSnackbar(successMsg)
-            walletViewModel.dismissSuccessMessage()
+            walletViewModel.dismissMessages()
         }
     }
 
@@ -278,12 +278,8 @@ fun WalletScreen(
 
     if (showDepositSheet) {
         DepositBottomSheet(
-            onDismiss = { showDepositSheet = false },
-            onConfirmDeposit = { amount ->
-                walletViewModel.deposit(amount) {
-                    showDepositSheet = false
-                }
-            }
+            walletViewModel = walletViewModel,
+            onDismiss = { showDepositSheet = false }
         )
     }
 }

@@ -7,6 +7,7 @@ import com.example.data.model.FollowRow
 import com.example.data.model.PostRow
 import com.example.data.model.ProfileRow
 import com.example.data.model.WalletRow
+import com.example.data.repository.UserWalletRepository
 import com.example.data.supabase.SupabaseManager
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
@@ -32,10 +33,35 @@ sealed interface ProfileUiState {
     data class Error(val message: String, val fallbackData: Success? = null) : ProfileUiState
 }
 
-class ProfileViewModel : ViewModel() {
+class ProfileViewModel(
+    private val walletRepository: UserWalletRepository = UserWalletRepository.get()
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    init {
+        observeSharedWalletBalance()
+    }
+
+    /**
+     * Requirement 3: Real-Time Cross-Screen Balance Sync.
+     * When a deposit occurs in WalletScreen/NOWPayments, ProfileScreen instantly reflects
+     * the exact same balance (e.g. $75.00) without requiring a manual refresh!
+     */
+    private fun observeSharedWalletBalance() {
+        viewModelScope.launch {
+            walletRepository.balance.collect { newBal ->
+                val current = _uiState.value
+                if (current is ProfileUiState.Success) {
+                    if (current.balance != newBal) {
+                        Log.d(TAG, "Dynamic balance sync received: $$newBal")
+                        _uiState.value = current.copy(balance = newBal)
+                    }
+                }
+            }
+        }
+    }
 
     fun loadProfile(explicitUserId: String? = null) {
         viewModelScope.launch {
@@ -60,7 +86,7 @@ class ProfileViewModel : ViewModel() {
             val userId = explicitUserId ?: currentUser?.id
 
             if (userId.isNullOrBlank()) {
-                // If user is missing from session, fallback to safe default rather than crashing
+                val cachedBal = walletRepository.balance.value
                 _uiState.value = ProfileUiState.Success(
                     profile = ProfileRow(
                         id = "unknown",
@@ -70,11 +96,14 @@ class ProfileViewModel : ViewModel() {
                     postsCount = 0,
                     followersCount = 0,
                     followingCount = 0,
-                    balance = 0.0,
+                    balance = cachedBal,
                     posts = emptyList()
                 )
                 return@withContext
             }
+
+            // Attach user to wallet repository to ensure active realtime listeners
+            walletRepository.attachUser(userId, viewModelScope)
 
             // 1. Fetch Profile
             val profile = runCatching {
@@ -91,7 +120,7 @@ class ProfileViewModel : ViewModel() {
                 avatarUrl = null
             )
 
-            // 2. Dynamic Query: postsCount (total rows where user_id = currentUserId in posts)
+            // 2. Dynamic Query: postsCount and user posts
             val userPosts = runCatching {
                 SupabaseManager.client.from("posts")
                     .select {
@@ -101,10 +130,9 @@ class ProfileViewModel : ViewModel() {
             }.getOrElse { err ->
                 Log.w(TAG, "Querying posts table failed safely: ${err.message}")
                 emptyList()
-            }
-            val postsCount = userPosts.size
+            }.reversed() // Most recent first
 
-            // 3. Dynamic Query: followersCount (total rows where followed_id = currentUserId in follows)
+            // 3. Dynamic Query: followersCount
             val followersCount = runCatching {
                 val list = SupabaseManager.client.from("follows")
                     .select {
@@ -117,7 +145,7 @@ class ProfileViewModel : ViewModel() {
                 0
             }
 
-            // 4. Dynamic Query: followingCount (total rows where follower_id = currentUserId in follows)
+            // 4. Dynamic Query: followingCount
             val followingCount = runCatching {
                 val list = SupabaseManager.client.from("follows")
                     .select {
@@ -130,31 +158,21 @@ class ProfileViewModel : ViewModel() {
                 0
             }
 
-            // 5. Dynamic Query: balance (user's real-time balance from wallets table)
-            val balance = runCatching {
-                val wallets = SupabaseManager.client.from("wallets")
-                    .select {
-                        filter { eq("user_id", userId) }
-                    }
-                    .decodeList<WalletRow>()
-                wallets.firstOrNull()?.balance ?: 0.0
-            }.getOrElse { err ->
-                Log.w(TAG, "Querying wallet balance failed safely: ${err.message}")
-                0.0
-            }
+            // 5. Shared Wallet Balance (ensures immediate synchronization)
+            val currentBalance = walletRepository.balance.value
 
             _uiState.value = ProfileUiState.Success(
                 profile = profile,
-                postsCount = postsCount,
+                postsCount = userPosts.size,
                 followersCount = followersCount,
                 followingCount = followingCount,
-                balance = balance,
+                balance = currentBalance,
                 posts = userPosts,
                 isRefreshing = false
             )
         } catch (e: Throwable) {
             Log.e(TAG, "Unexpected error fetching profile safely: ${e.message}", e)
-            // Absolute crash prevention: provide zero fallback
+            val fallbackBal = walletRepository.balance.value
             _uiState.value = ProfileUiState.Success(
                 profile = ProfileRow(
                     id = explicitUserId ?: "guest",
@@ -164,29 +182,65 @@ class ProfileViewModel : ViewModel() {
                 postsCount = 0,
                 followersCount = 0,
                 followingCount = 0,
-                balance = 0.0,
+                balance = fallbackBal,
                 posts = emptyList(),
                 isRefreshing = false
             )
         }
     }
 
-    fun createPost(content: String, onComplete: () -> Unit = {}) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val user = SupabaseManager.auth.currentUserOrNull() ?: return@launch
-            runCatching {
-                val newPost = PostRow(
-                    userId = user.id,
-                    content = content,
-                    authorName = user.email?.substringBefore("@") ?: "Sync User"
+    /**
+     * Requirement 4: Post Creation & State Refresh
+     * 1. Immediately saves the record to posts table in Supabase.
+     * 2. Immediately recalculates postsCount and refreshes the feed to display the new post.
+     * 3. Eliminates the permanent "Posts 0" state.
+     */
+    fun createPost(content: String, onPostSubmitted: () -> Unit = {}) {
+        val trimmed = content.trim()
+        if (trimmed.isBlank()) return
+
+        // Call completion callback immediately to close dialog without blocking UI
+        onPostSubmitted()
+
+        viewModelScope.launch {
+            val user = SupabaseManager.auth.currentUserOrNull()
+            val userId = user?.id ?: "sync-user"
+            val author = user?.email?.substringBefore("@") ?: "You"
+
+            val optimisticPost = PostRow(
+                id = "post_${System.currentTimeMillis()}",
+                userId = userId,
+                content = trimmed,
+                authorName = author,
+                createdAt = "Just now"
+            )
+
+            // 1. Immediate optimistic UI update (eliminates "Posts 0" delay)
+            val current = _uiState.value
+            if (current is ProfileUiState.Success) {
+                _uiState.value = current.copy(
+                    postsCount = current.postsCount + 1,
+                    posts = listOf(optimisticPost) + current.posts
                 )
-                SupabaseManager.client.from("posts").insert(newPost)
-            }.onSuccess {
-                refreshProfile(user.id)
-                withContext(Dispatchers.Main) { onComplete() }
-            }.onFailure { err ->
-                Log.w(TAG, "Failed to insert post: ${err.message}")
             }
+
+            // 2. Persist to Supabase database
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val dbPost = PostRow(
+                        userId = userId,
+                        content = trimmed,
+                        authorName = author
+                    )
+                    SupabaseManager.client.from("posts").insert(dbPost)
+                    Log.d(TAG, "Successfully inserted post into Supabase posts table")
+                }.onFailure { err ->
+                    Log.w(TAG, "Database warning inserting post: ${err.message}")
+                }
+            }
+
+            // 3. Complete reload to guarantee ledger consistency
+            fetchDataInternal(userId)
         }
     }
 

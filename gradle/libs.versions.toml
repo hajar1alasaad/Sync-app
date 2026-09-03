@@ -44,6 +44,7 @@ googleid = "1.1.1"
 supabaseBom = "3.1.1"
 ktor = "3.0.3"
 kotlinxSerializationJson = "1.8.0"
+browser = "1.8.0"
 
 
 [libraries]
@@ -104,6 +105,8 @@ googleid = { group = "com.google.android.libraries.identity.googleid", name = "g
 supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabaseBom" }
 supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
 supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
+supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime-kt" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 

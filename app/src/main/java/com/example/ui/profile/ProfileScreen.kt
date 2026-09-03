@@ -1,5 +1,6 @@
 package com.example.ui.profile
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,14 +9,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,7 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
@@ -60,19 +58,22 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.PostRow
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     profileViewModel: ProfileViewModel,
-    onNavigateToWallet: () -> Unit,
     onSignOut: () -> Unit,
+    onOpenWallet: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by profileViewModel.uiState.collectAsState()
@@ -90,15 +91,13 @@ fun ProfileScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Profile",
+                        text = "Sync Profile",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp
+                        fontSize = 20.sp,
+                        style = TextStyle(textDirection = TextDirection.Content)
                     )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0B0F19)
-                ),
                 actions = {
                     IconButton(
                         onClick = { profileViewModel.refreshProfile() },
@@ -115,12 +114,15 @@ fun ProfileScreen(
                         modifier = Modifier.testTag("sign_out_button")
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
                             contentDescription = "Sign Out",
-                            tint = Color(0xFFF87171)
+                            tint = Color(0xFFEF4444)
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF0B0F19)
+                )
             )
         }
     ) { innerPadding ->
@@ -147,7 +149,7 @@ fun ProfileScreen(
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // 1. User Header with Avatar & Details
+                    // 1. Profile Header Card
                     item {
                         ProfileHeaderCard(
                             fullName = state.profile.fullName ?: "Sync Member",
@@ -156,11 +158,11 @@ fun ProfileScreen(
                         )
                     }
 
-                    // 2. Dynamic Metric Stats Cards: Posts, Followers, Following
+                    // 2. Dynamic Metric Cards
                     item {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             DynamicStatCard(
                                 count = state.postsCount,
@@ -183,11 +185,11 @@ fun ProfileScreen(
                         }
                     }
 
-                    // 3. Dynamic Real-time Connected Wallet Card
+                    // 3. Connected Wallet Card (Real-Time Synchronized)
                     item {
                         ConnectedWalletCard(
                             balance = state.balance,
-                            onOpenWallet = onNavigateToWallet
+                            onOpenWallet = onOpenWallet
                         )
                     }
 
@@ -195,9 +197,7 @@ fun ProfileScreen(
                     item {
                         Card(
                             shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color(0xFF1E293B)
-                            ),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF161F30)),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { showNewPostDialog = true }
@@ -229,7 +229,8 @@ fun ProfileScreen(
                                     Text(
                                         text = "Sync an update to your network...",
                                         color = Color(0xFF94A3B8),
-                                        fontSize = 14.sp
+                                        fontSize = 14.sp,
+                                        style = TextStyle(textDirection = TextDirection.Content)
                                     )
                                 }
                                 Icon(
@@ -253,19 +254,23 @@ fun ProfileScreen(
                         ) {
                             Text(
                                 text = "Your Sync Activity",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    textDirection = TextDirection.Content
+                                ),
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 text = "${state.postsCount} total",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    textDirection = TextDirection.Content
+                                ),
                                 color = Color(0xFF64748B)
                             )
                         }
                     }
 
-                    // 6. User Posts List or Empty Safe Fallback
+                    // 6. User Posts List or Empty Fallback
                     if (state.posts.isEmpty()) {
                         item {
                             EmptyPostsPlaceholder(
@@ -286,7 +291,6 @@ fun ProfileScreen(
 
             is ProfileUiState.Empty,
             is ProfileUiState.Error -> {
-                // Absolute crash prevention: Default zero fallback view
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -301,13 +305,17 @@ fun ProfileScreen(
                         Text(
                             text = "No profile data loaded",
                             color = Color.White,
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                textDirection = TextDirection.Content
+                            )
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Safe zero metrics active.",
                             color = Color(0xFF94A3B8),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                textDirection = TextDirection.Content
+                            )
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
@@ -328,11 +336,18 @@ fun ProfileScreen(
     if (showSignOutDialog) {
         AlertDialog(
             onDismissRequest = { showSignOutDialog = false },
-            title = { Text(text = "Confirm Sign Out", color = Color.White) },
+            title = {
+                Text(
+                    text = "Confirm Sign Out",
+                    color = Color.White,
+                    style = TextStyle(textDirection = TextDirection.Content)
+                )
+            },
             text = {
                 Text(
                     text = "Are you sure you want to sign out of Sync? Navigation will be securely locked until you sign back in.",
-                    color = Color(0xFFCBD5E1)
+                    color = Color(0xFFCBD5E1),
+                    style = TextStyle(textDirection = TextDirection.Content)
                 )
             },
             containerColor = Color(0xFF1E293B),
@@ -357,14 +372,14 @@ fun ProfileScreen(
         )
     }
 
-    // Create Post Dialog
+    // Create Post Dialog: Immediately close dialog & persist to Supabase
     if (showNewPostDialog) {
         CreatePostDialog(
             onDismiss = { showNewPostDialog = false },
             onSubmit = { content ->
-                profileViewModel.createPost(content) {
-                    showNewPostDialog = false
-                }
+                // Requirement 4: Immediately close the dialog and save record to posts table
+                showNewPostDialog = false
+                profileViewModel.createPost(content)
             }
         )
     }
@@ -378,9 +393,7 @@ private fun ProfileHeaderCard(
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1E293B)
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
         modifier = Modifier
             .fillMaxWidth()
             .border(
@@ -429,7 +442,9 @@ private fun ProfileHeaderCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = fullName,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        textDirection = TextDirection.Content
+                    ),
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -439,7 +454,9 @@ private fun ProfileHeaderCard(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = email,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            textDirection = TextDirection.Content
+                        ),
                         color = Color(0xFF94A3B8),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -458,7 +475,8 @@ private fun ProfileHeaderCard(
                         text = "Supabase Synced",
                         fontSize = 11.sp,
                         color = Color(0xFF10B981),
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        style = TextStyle(textDirection = TextDirection.Content)
                     )
                 }
             }
@@ -475,9 +493,7 @@ private fun DynamicStatCard(
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF131D31)
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF131D31)),
         modifier = modifier
             .border(
                 width = 1.dp,
@@ -496,14 +512,17 @@ private fun DynamicStatCard(
                 text = count.toString(),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    textDirection = TextDirection.Content
                 ),
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    textDirection = TextDirection.Content
+                ),
                 color = Color(0xFF94A3B8),
                 fontSize = 12.sp
             )
@@ -519,9 +538,7 @@ private fun ConnectedWalletCard(
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1E1B4B)
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B4B)),
         modifier = modifier
             .fillMaxWidth()
             .border(
@@ -557,15 +574,18 @@ private fun ConnectedWalletCard(
                 Column {
                     Text(
                         text = "Connected Wallet",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            textDirection = TextDirection.Content
+                        ),
                         color = Color(0xFFC7D2FE)
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "$${String.format("%.2f", balance)}",
+                        text = "$${String.format(Locale.US, "%.2f", balance)}",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 22.sp
+                            fontSize = 22.sp,
+                            textDirection = TextDirection.Content
                         ),
                         color = Color.White,
                         modifier = Modifier.testTag("profile_wallet_balance_text")
@@ -576,16 +596,14 @@ private fun ConnectedWalletCard(
             Button(
                 onClick = onOpenWallet,
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF6366F1)
-                ),
-                contentPadding = ButtonDefaults.ContentPadding,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
                 modifier = Modifier.testTag("open_wallet_button")
             ) {
                 Text(
                     text = "Open",
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    style = TextStyle(textDirection = TextDirection.Content)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
@@ -605,9 +623,7 @@ private fun PostFeedItem(
 ) {
     Card(
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF161F30)
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF161F30)),
         modifier = modifier
             .fillMaxWidth()
             .border(
@@ -625,7 +641,8 @@ private fun PostFeedItem(
                 text = post.content,
                 color = Color.White,
                 fontSize = 14.sp,
-                lineHeight = 20.sp
+                lineHeight = 20.sp,
+                style = TextStyle(textDirection = TextDirection.Content)
             )
             Spacer(modifier = Modifier.height(10.dp))
             Row(
@@ -637,12 +654,14 @@ private fun PostFeedItem(
                     text = post.authorName ?: "You",
                     color = Color(0xFF818CF8),
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    style = TextStyle(textDirection = TextDirection.Content)
                 )
                 Text(
                     text = "Just now",
                     color = Color(0xFF64748B),
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    style = TextStyle(textDirection = TextDirection.Content)
                 )
             }
         }
@@ -655,9 +674,7 @@ private fun EmptyPostsPlaceholder(
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF131D31)
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF131D31)),
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(16.dp))
@@ -670,14 +687,18 @@ private fun EmptyPostsPlaceholder(
         ) {
             Text(
                 text = "0 Posts",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    textDirection = TextDirection.Content
+                ),
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Your post feed is empty. Post an update to start syncing with your followers.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    textDirection = TextDirection.Content
+                ),
                 color = Color(0xFF94A3B8),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
@@ -685,11 +706,12 @@ private fun EmptyPostsPlaceholder(
             Button(
                 onClick = onNewPostClick,
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4F46E5)
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5))
             ) {
-                Text("Create First Post")
+                Text(
+                    text = "Create First Post",
+                    style = TextStyle(textDirection = TextDirection.Content)
+                )
             }
         }
     }
@@ -705,14 +727,30 @@ private fun CreatePostDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(text = "Sync an Update", color = Color.White, fontWeight = FontWeight.Bold)
+            Text(
+                text = "Sync an Update",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                style = TextStyle(textDirection = TextDirection.Content)
+            )
         },
         text = {
             Column {
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
-                    placeholder = { Text("What's on your mind?", color = Color(0xFF64748B)) },
+                    placeholder = {
+                        Text(
+                            text = "What's on your mind?",
+                            color = Color(0xFF64748B),
+                            style = TextStyle(textDirection = TextDirection.Content)
+                        )
+                    },
+                    textStyle = TextStyle(
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        textDirection = TextDirection.Content
+                    ),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
@@ -741,12 +779,19 @@ private fun CreatePostDialog(
                 ),
                 modifier = Modifier.testTag("submit_post_button")
             ) {
-                Text("Post")
+                Text(
+                    text = "Post",
+                    style = TextStyle(textDirection = TextDirection.Content)
+                )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color(0xFF94A3B8))
+                Text(
+                    text = "Cancel",
+                    color = Color(0xFF94A3B8),
+                    style = TextStyle(textDirection = TextDirection.Content)
+                )
             }
         }
     )
