@@ -1,0 +1,42 @@
+name: Android CI/CD Build & Test
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Generate Dummy Keystore
+        run: |
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build Debug APK
+        env:
+          SUPABASE_URL: "https://xkqtppxprcwwktiadlcv.supabase.co"
+          SUPABASE_ANON_KEY: "sb_publishable_BMlTsgrR82GKfrZtylfMIg_X62xAgz7"
+          NOWPAYMENTS_API_KEY: "8F5HSPW-3104VE2-K80S2CR-7WCCBZC"
+          NOWPAYMENTS_PUBLIC_KEY: "1cd86f0b-91e1-4d25-8e47-dcb7e79b15d9"
+        run: gradle assembleDebug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
